@@ -1,0 +1,95 @@
+{
+  "versao": 1,
+  "tema": "Adoção de Pets",
+  "descricao": "Usuários cadastram animais para adoção. Qualquer pessoa vê os animais; só quem cadastrou altera ou remove. Usuários logados fazem pedidos de adoção, e só o dono do animal decide sobre eles.",
+  "rotas": [
+    {
+      "metodo": "GET", "caminho": "/animais", "acesso": "aberto", "descricao": "Lista todos os animais.",
+      "exemplos": [
+        { "descricao": "Lista os animais", "requisicao": null, "resposta": [ { "id": 1, "nome": "Rex", "especie": "cachorro", "idade": 3, "descricao": "Brincalhão e vacinado", "status": "disponivel", "usuarioId": 3 } ], "status": 200 }
+      ]
+    },
+    {
+      "metodo": "GET", "caminho": "/animais/:id", "acesso": "aberto", "descricao": "Detalha um animal.",
+      "exemplos": [
+        { "descricao": "Animal existe", "requisicao": null, "resposta": { "id": 1, "nome": "Rex", "especie": "cachorro", "idade": 3, "descricao": "Brincalhão e vacinado", "status": "disponivel", "usuarioId": 3 }, "status": 200 },
+        { "descricao": "Animal não existe", "requisicao": null, "resposta": { "erro": "Animal não encontrado" }, "status": 404 }
+      ]
+    },
+    {
+      "metodo": "POST", "caminho": "/animais", "acesso": "logado", "descricao": "Cadastra um animal. O dono é quem está logado.",
+      "exemplos": [
+        { "descricao": "Dados válidos", "requisicao": { "nome": "Rex", "especie": "cachorro", "idade": 3, "descricao": "Brincalhão e vacinado" }, "resposta": { "id": 1, "nome": "Rex", "especie": "cachorro", "idade": 3, "descricao": "Brincalhão e vacinado", "status": "disponivel", "usuarioId": 3 }, "status": 201 },
+        { "descricao": "Falta a espécie", "requisicao": { "nome": "Rex", "idade": 3 }, "resposta": { "erro": "Campo obrigatório ausente: especie" }, "status": 400 },
+        { "descricao": "Idade negativa", "requisicao": { "nome": "Rex", "especie": "cachorro", "idade": -2 }, "resposta": { "erro": "Idade não pode ser negativa" }, "status": 400 },
+        { "descricao": "Sem token", "requisicao": { "nome": "Rex", "especie": "cachorro", "idade": 3 }, "resposta": { "erro": "Token ausente ou inválido" }, "status": 401 }
+      ]
+    },
+    {
+      "metodo": "PUT", "caminho": "/animais/:id", "acesso": "dono", "descricao": "Altera um animal. Só o dono pode.",
+      "exemplos": [
+        { "descricao": "Dono altera o animal", "requisicao": { "nome": "Rex", "especie": "cachorro", "idade": 4, "descricao": "Brincalhão, vacinado e castrado" }, "resposta": { "id": 1, "nome": "Rex", "especie": "cachorro", "idade": 4, "descricao": "Brincalhão, vacinado e castrado", "status": "disponivel", "usuarioId": 3 }, "status": 200 },
+        { "descricao": "Idade negativa", "requisicao": { "nome": "Rex", "especie": "cachorro", "idade": -2 }, "resposta": { "erro": "Idade não pode ser negativa" }, "status": 400 },
+        { "descricao": "Sem token", "requisicao": { "nome": "Rex", "especie": "cachorro", "idade": 4 }, "resposta": { "erro": "Token ausente ou inválido" }, "status": 401 },
+        { "descricao": "Logado, mas não é o dono", "requisicao": { "nome": "Rex", "especie": "cachorro", "idade": 4 }, "resposta": { "erro": "Sem permissão para alterar este animal" }, "status": 403 },
+        { "descricao": "Animal não existe", "requisicao": { "nome": "Rex", "especie": "cachorro", "idade": 4 }, "resposta": { "erro": "Animal não encontrado" }, "status": 404 }
+      ]
+    },
+    {
+      "metodo": "DELETE", "caminho": "/animais/:id", "acesso": "dono", "descricao": "Remove um animal. Só o dono pode.",
+      "exemplos": [
+        { "descricao": "Dono remove o animal", "requisicao": null, "resposta": null, "status": 204 },
+        { "descricao": "Sem token", "requisicao": null, "resposta": { "erro": "Token ausente ou inválido" }, "status": 401 },
+        { "descricao": "Logado, mas não é o dono", "requisicao": null, "resposta": { "erro": "Sem permissão para remover este animal" }, "status": 403 },
+        { "descricao": "Animal não existe", "requisicao": null, "resposta": { "erro": "Animal não encontrado" }, "status": 404 }
+      ]
+    },
+    {
+      "metodo": "POST", "caminho": "/animais/:id/pedidos", "acesso": "logado", "descricao": "Faz um pedido de adoção para o animal. O pedido pertence a quem está logado.",
+      "exemplos": [
+        { "descricao": "Dados válidos", "requisicao": { "mensagem": "Tenho quintal e já criei cães antes" }, "resposta": { "id": 10, "mensagem": "Tenho quintal e já criei cães antes", "status": "pendente", "animalId": 1, "usuarioId": 5 }, "status": 201 },
+        { "descricao": "Mensagem vazia", "requisicao": { "mensagem": "" }, "resposta": { "erro": "Campo obrigatório ausente: mensagem" }, "status": 400 },
+        { "descricao": "Animal já adotado", "requisicao": { "mensagem": "Tenho quintal e já criei cães antes" }, "resposta": { "erro": "Este animal já foi adotado" }, "status": 400 },
+        { "descricao": "Pedido para o próprio animal", "requisicao": { "mensagem": "Quero adotar" }, "resposta": { "erro": "Você não pode pedir a adoção do seu próprio animal" }, "status": 400 },
+        { "descricao": "Pedido repetido", "requisicao": { "mensagem": "Tenho quintal e já criei cães antes" }, "resposta": { "erro": "Você já fez um pedido para este animal" }, "status": 400 },
+        { "descricao": "Sem token", "requisicao": { "mensagem": "Tenho quintal e já criei cães antes" }, "resposta": { "erro": "Token ausente ou inválido" }, "status": 401 },
+        { "descricao": "Animal não existe", "requisicao": { "mensagem": "Tenho quintal e já criei cães antes" }, "resposta": { "erro": "Animal não encontrado" }, "status": 404 }
+      ]
+    },
+    {
+      "metodo": "GET", "caminho": "/pedidos", "acesso": "logado", "descricao": "Lista os pedidos de adoção feitos por quem está logado.",
+      "exemplos": [
+        { "descricao": "Lista os meus pedidos", "requisicao": null, "resposta": [ { "id": 10, "mensagem": "Tenho quintal e já criei cães antes", "status": "pendente", "animalId": 1, "usuarioId": 5 } ], "status": 200 },
+        { "descricao": "Sem token", "requisicao": null, "resposta": { "erro": "Token ausente ou inválido" }, "status": 401 }
+      ]
+    },
+    {
+      "metodo": "DELETE", "caminho": "/pedidos/:id", "acesso": "dono", "descricao": "Cancela um pedido de adoção. Só quem fez o pedido pode.",
+      "exemplos": [
+        { "descricao": "Dono do pedido cancela", "requisicao": null, "resposta": null, "status": 204 },
+        { "descricao": "Sem token", "requisicao": null, "resposta": { "erro": "Token ausente ou inválido" }, "status": 401 },
+        { "descricao": "Logado, mas não fez o pedido", "requisicao": null, "resposta": { "erro": "Sem permissão para cancelar este pedido" }, "status": 403 },
+        { "descricao": "Pedido não existe", "requisicao": null, "resposta": { "erro": "Pedido não encontrado" }, "status": 404 }
+      ]
+    },
+    {
+      "metodo": "GET", "caminho": "/animais/:id/pedidos", "acesso": "dono", "descricao": "Lista os pedidos recebidos por um animal. Só o dono do animal pode.",
+      "exemplos": [
+        { "descricao": "Dono do animal lista os pedidos", "requisicao": null, "resposta": [ { "id": 10, "mensagem": "Tenho quintal e já criei cães antes", "status": "pendente", "animalId": 1, "usuarioId": 5 } ], "status": 200 },
+        { "descricao": "Sem token", "requisicao": null, "resposta": { "erro": "Token ausente ou inválido" }, "status": 401 },
+        { "descricao": "Logado, mas não é o dono do animal", "requisicao": null, "resposta": { "erro": "Sem permissão para ver os pedidos deste animal" }, "status": 403 },
+        { "descricao": "Animal não existe", "requisicao": null, "resposta": { "erro": "Animal não encontrado" }, "status": 404 }
+      ]
+    },
+    {
+      "metodo": "PUT", "caminho": "/pedidos/:id/status", "acesso": "dono", "descricao": "Aprova ou recusa um pedido. Só o dono do animal pode. Ao aprovar, o animal passa a adotado.",
+      "exemplos": [
+        { "descricao": "Dono do animal aprova o pedido", "requisicao": { "status": "aprovado" }, "resposta": { "id": 10, "mensagem": "Tenho quintal e já criei cães antes", "status": "aprovado", "animalId": 1, "usuarioId": 5 }, "status": 200 },
+        { "descricao": "Status inválido", "requisicao": { "status": "talvez" }, "resposta": { "erro": "Status deve ser aprovado ou recusado" }, "status": 400 },
+        { "descricao": "Sem token", "requisicao": { "status": "aprovado" }, "resposta": { "erro": "Token ausente ou inválido" }, "status": 401 },
+        { "descricao": "Logado, mas não é o dono do animal", "requisicao": { "status": "aprovado" }, "resposta": { "erro": "Sem permissão para decidir sobre este pedido" }, "status": 403 },
+        { "descricao": "Pedido não existe", "requisicao": { "status": "aprovado" }, "resposta": { "erro": "Pedido não encontrado" }, "status": 404 }
+      ]
+    }
+  ]
+}

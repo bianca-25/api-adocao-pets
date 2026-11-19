@@ -1,0 +1,103 @@
+@host = http://localhost:3000
+
+### 1. Cadastrar Ana (dona do animal)
+POST {{host}}/auth/cadastro
+Content-Type: application/json
+
+{ "nome": "Ana", "email": "ana@email.com", "senha": "123456" }
+
+### 2. Cadastrar Beto (quem pede adoção)
+POST {{host}}/auth/cadastro
+Content-Type: application/json
+
+{ "nome": "Beto", "email": "beto@email.com", "senha": "123456" }
+
+### 3. Login da Ana
+# @name loginAna
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{ "email": "ana@email.com", "senha": "123456" }
+
+### 4. Login do Beto
+# @name loginBeto
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{ "email": "beto@email.com", "senha": "123456" }
+
+### 5. Perfil da Ana (logado)
+GET {{host}}/auth/perfil
+Authorization: Bearer {{loginAna.response.body.$.token}}
+
+### 6. Ana cadastra um animal
+POST {{host}}/animais
+Content-Type: application/json
+Authorization: Bearer {{loginAna.response.body.$.token}}
+
+{ "nome": "Rex", "especie": "cachorro", "idade": 3, "descricao": "Brincalhão e vacinado" }
+
+### 7. Listar animais (aberto)
+GET {{host}}/animais
+
+### 8. Detalhar o animal 1 (aberto)
+GET {{host}}/animais/1
+
+### 9. Ana atualiza o animal
+PUT {{host}}/animais/1
+Content-Type: application/json
+Authorization: Bearer {{loginAna.response.body.$.token}}
+
+{ "nome": "Rex", "especie": "cachorro", "idade": 4, "descricao": "Brincalhão, vacinado e castrado" }
+
+### 10. Beto pede a adoção
+POST {{host}}/animais/1/pedidos
+Content-Type: application/json
+Authorization: Bearer {{loginBeto.response.body.$.token}}
+
+{ "mensagem": "Tenho quintal e já criei cães antes" }
+
+### 11. Beto lista os pedidos dele
+GET {{host}}/pedidos
+Authorization: Bearer {{loginBeto.response.body.$.token}}
+
+### 12. Ana vê os pedidos do animal
+GET {{host}}/animais/1/pedidos
+Authorization: Bearer {{loginAna.response.body.$.token}}
+
+### 13. Ana aprova o pedido
+PUT {{host}}/pedidos/1/status
+Content-Type: application/json
+Authorization: Bearer {{loginAna.response.body.$.token}}
+
+{ "status": "aprovado" }
+
+### 14. Conferir que o animal virou adotado
+GET {{host}}/animais/1
+
+### ERRO 401: criar animal sem token
+POST {{host}}/animais
+Content-Type: application/json
+
+{ "nome": "Rex", "especie": "cachorro", "idade": 3 }
+
+### ERRO 403: Beto tenta editar o animal da Ana
+PUT {{host}}/animais/1
+Content-Type: application/json
+Authorization: Bearer {{loginBeto.response.body.$.token}}
+
+{ "nome": "Rex", "especie": "cachorro", "idade": 5 }
+
+### ERRO 404: animal que não existe
+GET {{host}}/animais/999
+
+### ERRO 400: idade negativa
+POST {{host}}/animais
+Content-Type: application/json
+Authorization: Bearer {{loginAna.response.body.$.token}}
+
+{ "nome": "Rex", "especie": "cachorro", "idade": -2 }
+
+### 15. Ana exclui o animal
+DELETE {{host}}/animais/1
+Authorization: Bearer {{loginAna.response.body.$.token}}
