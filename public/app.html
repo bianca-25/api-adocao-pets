@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Adoção de Pets</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, Arial, sans-serif; margin: 0; background: #f4f6f8; color: #1c1f23; }
+  header { background: #2d6a4f; color: #fff; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+  header h1 { margin: 0; font-size: 22px; }
+  main { padding: 18px 24px; max-width: 1150px; margin: 0 auto; }
+  .colunas { display: grid; grid-template-columns: 320px 1fr; gap: 18px; align-items: start; }
+  @media (max-width: 800px) { .colunas { grid-template-columns: 1fr; } }
+  section { background: #fff; border: 1px solid #d9dee3; border-radius: 8px; padding: 14px 16px; margin-bottom: 18px; }
+  h2 { margin: 0 0 10px; font-size: 17px; }
+  input, textarea { width: 100%; padding: 8px; margin: 0 0 8px; border: 1px solid #c4cbd2; border-radius: 6px; font-size: 14px; font-family: inherit; }
+  button { background: #2d6a4f; color: #fff; border: 0; border-radius: 6px; padding: 8px 12px; font-size: 14px; cursor: pointer; margin: 2px 4px 2px 0; }
+  button.sec { background: #5c6b78; }
+  button.perigo { background: #c0392b; }
+  [hidden] { display: none !important; }
+  #aviso { padding: 10px 14px; border-radius: 6px; margin-bottom: 14px; font-weight: 600; }
+  #aviso.ok { background: #d8f3dc; color: #1b5e34; }
+  #aviso.erro { background: #fde2e0; color: #a12a1f; }
+  #aviso:empty { display: none; }
+  .card { border: 1px solid #d9dee3; border-radius: 8px; padding: 12px; margin-bottom: 12px; background: #fafbfc; }
+  .card h3 { margin: 0 0 4px; font-size: 16px; }
+  .meta { color: #5c6b78; font-size: 13px; margin-bottom: 6px; }
+  .badge { display: inline-block; padding: 1px 9px; border-radius: 10px; font-size: 12px; font-weight: 700; }
+  .disponivel { background: #d8f3dc; color: #1b5e34; }
+  .adotado { background: #e3e6ea; color: #3d4852; }
+  .pendente { background: #fff3cd; color: #7a5b00; }
+  .aprovado { background: #d8f3dc; color: #1b5e34; }
+  .recusado { background: #fde2e0; color: #a12a1f; }
+  .sub { border-top: 1px dashed #c4cbd2; margin-top: 8px; padding-top: 8px; font-size: 13px; }
+  .linha { border-bottom: 1px solid #e3e6ea; padding: 6px 0; font-size: 13px; }
+  code { font-family: Consolas, monospace; font-size: 12px; word-break: break-all; color: #3d4852; }
+  .s2xx { color: #1b7f3b; font-weight: 700; }
+  .s4xx { color: #c0392b; font-weight: 700; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Adoção de Pets</h1>
+  <span id="quem">Você não está logado</span>
+</header>
+<main>
+  <div id="aviso"></div>
+  <div class="colunas">
+    <aside>
+      <section id="boxAuth">
+        <h2>Entrar</h2>
+        <input id="lEmail" type="email" placeholder="E-mail">
+        <input id="lSenha" type="password" placeholder="Senha">
+        <button data-acao="login">Entrar</button>
+        <h2 style="margin-top:14px">Cadastrar</h2>
+        <input id="cNome" placeholder="Nome">
+        <input id="cEmail" type="email" placeholder="E-mail">
+        <input id="cSenha" type="password" placeholder="Senha (mínimo 6 caracteres)">
+        <button data-acao="cadastrar">Cadastrar</button>
+      </section>
+
+      <section id="boxLogado" hidden>
+        <button class="sec" data-acao="sair">Sair</button>
+        <h2 style="margin-top:12px">Cadastrar animal</h2>
+        <input id="aNome" placeholder="Nome">
+        <input id="aEspecie" placeholder="Espécie (cachorro, gato...)">
+        <input id="aIdade" type="number" placeholder="Idade">
+        <input id="aDesc" placeholder="Descrição (opcional)">
+        <button data-acao="criar">Cadastrar animal</button>
+      </section>
+
+      <section id="boxMeusPedidos" hidden>
+        <h2>Meus pedidos de adoção</h2>
+        <div id="meusPedidos"></div>
+      </section>
+    </aside>
+
+    <div>
+      <section>
+        <h2>Animais para adoção</h2>
+        <div id="animais">Carregando...</div>
+      </section>
+    </div>
+  </div>
+
+  <section>
+    <h2>O que a API recebeu e respondeu (últimas requisições)</h2>
+    <div id="log"></div>
+  </section>
+</main>
+
+<script>
+const estado = { token: null, usuario: null, animais: [], pedidos: [], editando: null, abertos: {} };
+const registro = [];
+const $ = (id) => document.getElementById(id);
+const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const valor = (id) => $(id).value.trim();
+
+function aviso(texto, bom) {
+  $('aviso').textContent = texto;
+  $('aviso').className = bom ? 'ok' : 'erro';
+}
+
+function desenharLog() {
+  $('log').innerHTML = registro.map((l) =>
+    `<div class="linha"><b>${esc(l.metodo)} ${esc(l.caminho)}</b> &nbsp; ` +
+    `<span class="${l.status < 300 ? 's2xx' : 's4xx'}">${l.status}</span><br>` +
+    `Token no header: <code>${l.auth ? esc(l.auth.slice(0, 30)) + '…' : 'nenhum'}</code><br>` +
+    `<code>${esc(l.texto.slice(0, 200))}</code></div>`
+  ).join('') || 'Nenhuma requisição ainda.';
+}
+
+async function api(metodo, caminho, corpo) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (estado.token) headers.Authorization = 'Bearer ' + estado.token;
+  let r, texto;
+  try {
+    r = await fetch(caminho, { method: metodo, headers, body: corpo ? JSON.stringify(corpo) : undefined });
+    texto = await r.text();
+  } catch (e) {
+    aviso('Não foi possível falar com a API. O servidor está ligado?', false);
+    throw e;
+  }
+  let json = null;
+  try { json = texto ? JSON.parse(texto) : null; } catch (e) { /* sem JSON */ }
+  registro.unshift({ metodo, caminho, auth: headers.Authorization, status: r.status, texto });
+  if (registro.length > 8) registro.pop();
+  desenharLog();
+  return { status: r.status, json };
+}
+
+function falhou(r) {
+  aviso((r.json && r.json.erro) || 'Erro ' + r.status, false);
+}
+
+function desenhar() {
+  const logado = !!estado.usuario;
+  $('boxAuth').hidden = logado;
+  $('boxLogado').hidden = !logado;
+  $('boxMeusPedidos').hidden = !logado;
+  $('quem').textContent = logado ? `Logado como ${estado.usuario.nome} (${estado.usuario.email})` : 'Você não está logado';
+
+  $('animais').innerHTML = estado.animais.map((a) => {
+    const dono = logado && estado.usuario.id === a.usuarioId;
+    let corpo = '';
+    if (estado.editando === a.id) {
+      corpo = `<input id="eNome${a.id}" value="${esc(a.nome)}"><input id="eEsp${a.id}" value="${esc(a.especie)}">` +
+        `<input id="eIdade${a.id}" type="number" value="${esc(a.idade)}"><input id="eDesc${a.id}" value="${esc(a.descricao)}">` +
+        `<button data-acao="salvar" data-id="${a.id}">Salvar</button><button class="sec" data-acao="cancelarEdicao">Cancelar</button>`;
+    } else {
+      corpo = `<h3>${esc(a.nome)} <span class="badge ${esc(a.status)}">${esc(a.status)}</span></h3>` +
+        `<div class="meta">${esc(a.especie)} · ${esc(a.idade)} ano(s) · ${dono ? 'seu animal' : 'dono #' + esc(a.usuarioId)}</div>` +
+        `<div>${esc(a.descricao)}</div>`;
+      if (dono) {
+        corpo += `<div class="sub"><button data-acao="editar" data-id="${a.id}">Editar</button>` +
+          `<button class="perigo" data-acao="excluir" data-id="${a.id}">Excluir</button>` +
+          `<button class="sec" data-acao="verpedidos" data-id="${a.id}">Ver pedidos recebidos</button>`;
+        const lista = estado.abertos[a.id];
+        if (lista) {
+          corpo += lista.length ? lista.map((p) =>
+            `<div class="linha">Pedido #${p.id} de usuário #${esc(p.usuarioId)}: "${esc(p.mensagem)}" ` +
+            `<span class="badge ${esc(p.status)}">${esc(p.status)}</span> ` +
+            (p.status === 'pendente'
+              ? `<button data-acao="decidir" data-id="${p.id}" data-animal="${a.id}" data-status="aprovado">Aprovar</button>` +
+                `<button class="perigo" data-acao="decidir" data-id="${p.id}" data-animal="${a.id}" data-status="recusado">Recusar</button>`
+              : '') + '</div>').join('') : '<div class="linha">Nenhum pedido ainda.</div>';
+        }
+        corpo += '</div>';
+      } else if (logado && a.status === 'disponivel') {
+        corpo += `<div class="sub"><input id="m${a.id}" placeholder="Por que você quer adotar?">` +
+          `<button data-acao="pedir" data-id="${a.id}">Pedir adoção</button></div>`;
+      }
+    }
+    return `<div class="card">${corpo}</div>`;
+  }).join('') || 'Nenhum animal cadastrado ainda.';
+
+  $('meusPedidos').innerHTML = estado.pedidos.map((p) => {
+    const an = estado.animais.find((a) => a.id === p.animalId);
+    return `<div class="linha">${esc(an ? an.nome : 'Animal #' + p.animalId)} · ` +
+      `<span class="badge ${esc(p.status)}">${esc(p.status)}</span> ` +
+      `<button class="sec" data-acao="cancelar" data-id="${p.id}">Cancelar</button></div>`;
+  }).join('') || 'Você ainda não fez pedidos.';
+}
+
+async function carregar() {
+  estado.animais = (await api('GET', '/animais')).json || [];
+  estado.pedidos = estado.usuario ? ((await api('GET', '/pedidos')).json || []) : [];
+  desenhar();
+}
+
+const acoes = {
+  async cadastrar() {
+    const r = await api('POST', '/auth/cadastro', { nome: valor('cNome'), email: valor('cEmail'), senha: $('cSenha').value });
+    if (r.status === 201) {
+      $('lEmail').value = valor('cEmail');
+      aviso('Cadastro feito! Agora é só entrar com a sua senha.', true);
+    } else falhou(r);
+  },
+  async login() {
+    const r = await api('POST', '/auth/login', { email: valor('lEmail'), senha: $('lSenha').value });
+    if (r.status !== 200) return falhou(r);
+    estado.token = r.json.token;
+    const p = await api('GET', '/auth/perfil');
+    estado.usuario = p.json;
+    $('lSenha').value = '';
+    aviso('Login feito! O token agora vai no header de cada requisição.', true);
+    await carregar();
+  },
+  async sair() {
+    estado.token = null; estado.usuario = null; estado.abertos = {}; estado.editando = null;
+    aviso('Você saiu.', true);
+    await carregar();
+  },
+  async criar() {
+    const idade = valor('aIdade');
+    const r = await api('POST', '/animais', { nome: valor('aNome'), especie: valor('aEspecie'), idade: idade === '' ? undefined : Number(idade), descricao: valor('aDesc') });
+    if (r.status !== 201) return falhou(r);
+    ['aNome', 'aEspecie', 'aIdade', 'aDesc'].forEach((i) => { $(i).value = ''; });
+    aviso('Animal cadastrado!', true);
+    await carregar();
+  },
+  editar(d) { estado.editando = Number(d.id); desenhar(); },
+  cancelarEdicao() { estado.editando = null; desenhar(); },
+  async salvar(d) {
+    const id = d.id;
+    const idade = valor('eIdade' + id);
+    const r = await api('PUT', '/animais/' + id, { nome: valor('eNome' + id), especie: valor('eEsp' + id), idade: idade === '' ? undefined : Number(idade), descricao: valor('eDesc' + id) });
+    if (r.status !== 200) return falhou(r);
+    estado.editando = null;
+    aviso('Animal atualizado!', true);
+    await carregar();
+  },
+  async excluir(d) {
+    if (!confirm('Excluir este animal?')) return;
+    const r = await api('DELETE', '/animais/' + d.id);
+    if (r.status !== 204) return falhou(r);
+    aviso('Animal excluído.', true);
+    await carregar();
+  },
+  async pedir(d) {
+    const r = await api('POST', `/animais/${d.id}/pedidos`, { mensagem: valor('m' + d.id) });
+    if (r.status !== 201) return falhou(r);
+    aviso('Pedido enviado! Agora é só esperar o dono decidir.', true);
+    await carregar();
+  },
+  async verpedidos(d) {
+    const r = await api('GET', `/animais/${d.id}/pedidos`);
+    if (r.status !== 200) return falhou(r);
+    estado.abertos[d.id] = r.json;
+    desenhar();
+  },
+  async decidir(d) {
+    const r = await api('PUT', `/pedidos/${d.id}/status`, { status: d.status });
+    if (r.status !== 200) return falhou(r);
+    aviso(d.status === 'aprovado' ? 'Pedido aprovado! O animal agora está adotado.' : 'Pedido recusado.', true);
+    estado.abertos[d.animal] = (await api('GET', `/animais/${d.animal}/pedidos`)).json;
+    await carregar();
+  },
+  async cancelar(d) {
+    const r = await api('DELETE', '/pedidos/' + d.id);
+    if (r.status !== 204) return falhou(r);
+    aviso('Pedido cancelado.', true);
+    await carregar();
+  },
+};
+
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-acao]');
+  if (!b) return;
+  try { await acoes[b.dataset.acao](b.dataset); } catch (err) { /* o aviso já foi mostrado */ }
+});
+
+desenharLog();
+carregar().catch(() => {});
+</script>
+</body>
+</html>

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel da API de Adoção de Pets</title>
+<style>
+  body { font-family: system-ui, Arial, sans-serif; margin: 0; background: #f4f6f8; color: #1c1f23; }
+  header { background: #2d6a4f; color: #fff; padding: 20px 28px; }
+  header h1 { margin: 0; font-size: 22px; }
+  header p { margin: 6px 0 0; opacity: .9; font-size: 14px; }
+  main { padding: 20px 28px; }
+  #resumo { font-size: 18px; font-weight: 600; margin-bottom: 12px; }
+  button { background: #2d6a4f; color: #fff; border: 0; border-radius: 6px; padding: 10px 16px; font-size: 15px; cursor: pointer; margin-bottom: 16px; }
+  button:disabled { opacity: .6; cursor: wait; }
+  table { border-collapse: collapse; width: 100%; background: #fff; font-size: 13px; }
+  th, td { border: 1px solid #d9dee3; padding: 7px 9px; text-align: left; vertical-align: top; }
+  th { background: #e9eef2; }
+  .grupo td { background: #d8f3dc; font-weight: 700; font-size: 14px; }
+  .ok { color: #1b7f3b; font-weight: 700; }
+  .falha { color: #c0392b; font-weight: 700; }
+  code { font-family: Consolas, monospace; font-size: 12px; word-break: break-all; }
+  .tag { display: inline-block; padding: 1px 7px; border-radius: 10px; background: #e9eef2; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Painel da API de Adoção de Pets</h1>
+  <p>Roda todas as rotas da API e mostra o resultado de cada uma.</p>
+</header>
+<main>
+  <div id="resumo">Rodando os testes...</div>
+  <button id="botao">Rodar de novo</button>
+  <div id="resultado"></div>
+</main>
+
+<script>
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+async function rodar() {
+  const linhas = [];
+  const tokens = {};
+  let total = 0;
+  let certos = 0;
+  const sufixo = Date.now(); // e-mails novos a cada execução, então dá para rodar várias vezes
+
+  const grupo = (nome) => linhas.push({ grupo: nome });
+
+  async function passo(desc, metodo, caminho, corpo, quem, esperado) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (quem && tokens[quem]) headers.Authorization = 'Bearer ' + tokens[quem];
+    const r = await fetch(caminho, {
+      method: metodo,
+      headers,
+      body: corpo ? JSON.stringify(corpo) : undefined,
+    });
+    const texto = await r.text();
+    let json = null;
+    try { json = texto ? JSON.parse(texto) : null; } catch (e) { /* resposta sem JSON */ }
+    const bom = r.status === esperado;
+    total++;
+    if (bom) certos++;
+    linhas.push({ desc, metodo, caminho, auth: headers.Authorization, esperado, status: r.status, bom, texto });
+    return json;
+  }
+
+  const emailAna = `ana${sufixo}@email.com`;
+  const emailBeto = `beto${sufixo}@email.com`;
+
+  grupo('Cadastro e login');
+  await passo('Cadastrar Ana (dona do animal)', 'POST', '/auth/cadastro', { nome: 'Ana', email: emailAna, senha: '123456' }, null, 201);
+  await passo('Cadastrar Beto (quem pede adoção)', 'POST', '/auth/cadastro', { nome: 'Beto', email: emailBeto, senha: '123456' }, null, 201);
+  await passo('Cadastro com e-mail repetido', 'POST', '/auth/cadastro', { nome: 'Ana', email: emailAna, senha: '123456' }, null, 400);
+  await passo('Login com senha errada', 'POST', '/auth/login', { email: emailAna, senha: 'errada' }, null, 401);
+  const loginAna = await passo('Login da Ana (devolve o token)', 'POST', '/auth/login', { email: emailAna, senha: '123456' }, null, 200);
+  tokens.Ana = loginAna && loginAna.token;
+  const loginBeto = await passo('Login do Beto (devolve o token)', 'POST', '/auth/login', { email: emailBeto, senha: '123456' }, null, 200);
+  tokens.Beto = loginBeto && loginBeto.token;
+  await passo('Perfil da Ana, usando o token', 'GET', '/auth/perfil', null, 'Ana', 200);
+  await passo('Perfil sem token', 'GET', '/auth/perfil', null, null, 401);
+
+  grupo('Animais');
+  await passo('Criar animal sem token', 'POST', '/animais', { nome: 'Rex', especie: 'cachorro', idade: 3 }, null, 401);
+  await passo('Criar animal sem espécie', 'POST', '/animais', { nome: 'Rex', idade: 3 }, 'Ana', 400);
+  await passo('Criar animal com idade negativa', 'POST', '/animais', { nome: 'Rex', especie: 'cachorro', idade: -2 }, 'Ana', 400);
+  const animal = await passo('Criar animal (Ana)', 'POST', '/animais', { nome: 'Rex', especie: 'cachorro', idade: 3, descricao: 'Brincalhão e vacinado' }, 'Ana', 201);
+  const id = animal && animal.id;
+  await passo('Listar animais (aberto)', 'GET', '/animais', null, null, 200);
+  await passo('Detalhar animal (aberto)', 'GET', '/animais/' + id, null, null, 200);
+  await passo('Detalhar animal que não existe', 'GET', '/animais/999999', null, null, 404);
+  await passo('Atualizar animal (dono)', 'PUT', '/animais/' + id, { nome: 'Rex', especie: 'cachorro', idade: 4, descricao: 'Vacinado e castrado' }, 'Ana', 200);
+  await passo('Atualizar animal sem token', 'PUT', '/animais/' + id, { nome: 'Rex', especie: 'cachorro', idade: 4 }, null, 401);
+  await passo('Atualizar animal de outra pessoa (Beto)', 'PUT', '/animais/' + id, { nome: 'Rex', especie: 'cachorro', idade: 5 }, 'Beto', 403);
+
+  grupo('Pedidos de adoção');
+  await passo('Pedir o próprio animal (Ana)', 'POST', `/animais/${id}/pedidos`, { mensagem: 'Quero' }, 'Ana', 400);
+  await passo('Pedido sem mensagem', 'POST', `/animais/${id}/pedidos`, { mensagem: '' }, 'Beto', 400);
+  const pedido = await passo('Pedir adoção (Beto)', 'POST', `/animais/${id}/pedidos`, { mensagem: 'Tenho quintal e já criei cães antes' }, 'Beto', 201);
+  const pid = pedido && pedido.id;
+  await passo('Pedido repetido (Beto)', 'POST', `/animais/${id}/pedidos`, { mensagem: 'De novo' }, 'Beto', 400);
+  await passo('Beto lista os pedidos dele', 'GET', '/pedidos', null, 'Beto', 200);
+  await passo('Ana lista os pedidos do animal', 'GET', `/animais/${id}/pedidos`, null, 'Ana', 200);
+  await passo('Beto tenta ver os pedidos do animal', 'GET', `/animais/${id}/pedidos`, null, 'Beto', 403);
+  await passo('Aprovar com status inválido', 'PUT', `/pedidos/${pid}/status`, { status: 'talvez' }, 'Ana', 400);
+  await passo('Beto tenta aprovar o próprio pedido', 'PUT', `/pedidos/${pid}/status`, { status: 'aprovado' }, 'Beto', 403);
+  await passo('Ana aprova o pedido', 'PUT', `/pedidos/${pid}/status`, { status: 'aprovado' }, 'Ana', 200);
+  await passo('Conferir: o animal virou "adotado"', 'GET', '/animais/' + id, null, null, 200);
+  await passo('Pedir um animal já adotado', 'POST', `/animais/${id}/pedidos`, { mensagem: 'Tarde demais' }, 'Beto', 400);
+
+  grupo('Exclusão');
+  await passo('Excluir animal sem token', 'DELETE', '/animais/' + id, null, null, 401);
+  await passo('Excluir animal de outra pessoa (Beto)', 'DELETE', '/animais/' + id, null, 'Beto', 403);
+  await passo('Excluir animal (dono)', 'DELETE', '/animais/' + id, null, 'Ana', 204);
+  await passo('Excluir de novo (não existe mais)', 'DELETE', '/animais/' + id, null, 'Ana', 404);
+
+  let n = 0;
+  let html = '<table><tr><th>#</th><th>Teste</th><th>Requisição</th><th>Token no header</th><th>Esperado</th><th>Recebido</th><th>Resultado</th><th>Resposta</th></tr>';
+  for (const l of linhas) {
+    if (l.grupo) {
+      html += `<tr class="grupo"><td colspan="8">${esc(l.grupo)}</td></tr>`;
+      continue;
+    }
+    n++;
+    const token = l.auth ? `<code>${esc(l.auth.slice(0, 24))}…</code>` : '<span class="tag">sem token</span>';
+    html += `<tr><td>${n}</td><td>${esc(l.desc)}</td><td><code>${esc(l.metodo)} ${esc(l.caminho)}</code></td><td>${token}</td>` +
+      `<td>${l.esperado}</td><td>${l.status}</td><td class="${l.bom ? 'ok' : 'falha'}">${l.bom ? 'OK' : 'FALHA'}</td>` +
+      `<td><code>${esc(l.texto.slice(0, 170))}</code></td></tr>`;
+  }
+  html += '</table>';
+
+  const resumo = document.getElementById('resumo');
+  resumo.textContent = certos === total ? `Tudo certo: ${certos} de ${total} testes OK` : `${total - certos} falha(s): ${certos} de ${total} testes OK`;
+  resumo.style.color = certos === total ? '#1b7f3b' : '#c0392b';
+  document.getElementById('resultado').innerHTML = html;
+}
+
+async function iniciar() {
+  const botao = document.getElementById('botao');
+  botao.disabled = true;
+  document.getElementById('resumo').textContent = 'Rodando os testes...';
+  try {
+    await rodar();
+  } catch (e) {
+    document.getElementById('resumo').textContent = 'Não foi possível rodar os testes. O servidor está ligado? ' + e.message;
+  }
+  botao.disabled = false;
+}
+
+document.getElementById('botao').addEventListener('click', iniciar);
+iniciar();
+</script>
+</body>
+</html>
